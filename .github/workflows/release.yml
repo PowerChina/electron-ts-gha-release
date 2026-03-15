@@ -50,7 +50,7 @@ jobs:
           fail_on_unmatched_files: false
 
   build-mac-intel:
-    runs-on: macos-13
+    runs-on: macos-15-intel
     steps:
       - name: Checkout
         uses: actions/checkout@v4
