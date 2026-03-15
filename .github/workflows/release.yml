@@ -10,31 +10,8 @@ permissions:
   contents: write
 
 jobs:
-  build-and-release:
-    strategy:
-      max-parallel: 1
-      matrix:
-        include:
-          - os: windows-latest
-            platform: windows
-            build_cmd: npm run dist -- --win nsis
-            artifact_name: windows-release
-            artifact_path: |
-              release/*.exe
-              release/*.yml
-              release/*.blockmap
-          - os: macos-13
-            platform: mac-intel
-            build_cmd: npm run dist -- --mac dmg zip --x64
-            artifact_name: mac-intel-release
-            artifact_path: |
-              release/*.dmg
-              release/*-mac.zip
-              release/*.yml
-              release/*.blockmap
-
-    runs-on: ${{ matrix.os }}
-
+  build-windows:
+    runs-on: windows-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -48,20 +25,67 @@ jobs:
       - name: Install deps
         run: npm ci
 
-      - name: Build ${{ matrix.platform }} package
-        run: ${{ matrix.build_cmd }}
+      - name: Build Windows package
+        run: npm run dist -- --win nsis
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload build artifacts
+      - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact_name }}
-          path: ${{ matrix.artifact_path }}
+          name: windows-release
+          path: |
+            release/*.exe
+            release/*.yml
+            release/*.blockmap
 
-      - name: Create/Update GitHub Release
+      - name: Create/Update GitHub Release (Windows assets)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ matrix.artifact_path }}
+          files: |
+            release/*.exe
+            release/*.yml
+            release/*.blockmap
+          fail_on_unmatched_files: false
+
+  build-mac-intel:
+    runs-on: macos-13
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Build mac Intel package
+        run: npm run dist -- --mac dmg zip --x64
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload mac Intel artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-intel-release
+          path: |
+            release/*.dmg
+            release/*-mac.zip
+            release/*.yml
+            release/*.blockmap
+
+      - name: Create/Update GitHub Release (mac Intel assets)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/*.dmg
+            release/*-mac.zip
+            release/*.yml
+            release/*.blockmap
           fail_on_unmatched_files: false
