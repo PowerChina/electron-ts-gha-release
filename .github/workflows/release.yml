@@ -11,7 +11,29 @@ permissions:
 
 jobs:
   build-and-release:
-    runs-on: windows-latest
+    strategy:
+      max-parallel: 1
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows
+            build_cmd: npm run dist -- --win nsis
+            artifact_name: windows-release
+            artifact_path: |
+              release/*.exe
+              release/*.yml
+              release/*.blockmap
+          - os: macos-13
+            platform: mac-intel
+            build_cmd: npm run dist -- --mac dmg zip --x64
+            artifact_name: mac-intel-release
+            artifact_path: |
+              release/*.dmg
+              release/*-mac.zip
+              release/*.yml
+              release/*.blockmap
+
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout
@@ -20,31 +42,26 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install deps
         run: npm ci
 
-      - name: Build Windows installer
-        run: npm run dist -- --win nsis
+      - name: Build ${{ matrix.platform }} package
+        run: ${{ matrix.build_cmd }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: windows-release
-          path: |
-            release/*.exe
-            release/*.yml
-            release/*.blockmap
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_path }}
 
-      - name: Create GitHub Release
+      - name: Create/Update GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            release/*.exe
-            release/*.yml
-            release/*.blockmap
+          files: ${{ matrix.artifact_path }}
+          fail_on_unmatched_files: false
