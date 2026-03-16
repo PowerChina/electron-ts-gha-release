@@ -83,6 +83,14 @@ ipcMain.handle('window:get-always-on-top', () => {
   return mainWindow.isAlwaysOnTop();
 });
 
+ipcMain.handle('window:set-size', (_event, width: number, height: number) => {
+  if (!mainWindow) return false;
+  const w = Math.max(360, Math.floor(width));
+  const h = Math.max(220, Math.floor(height));
+  mainWindow.setSize(w, h, true);
+  return true;
+});
+
 app.whenReady().then(() => {
   createWindow();
   createTray();

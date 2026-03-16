@@ -7,7 +7,7 @@
     <style>
       :root {
         --bg: #f3f7ff;
-        --card: #ffffff;
+        --card: #fff;
         --text: #1d2a44;
         --muted: #5d6f93;
         --primary: #2f6fff;
@@ -29,10 +29,19 @@
         color: var(--text);
         font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       }
-      .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
-      button, select, input { border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; background: var(--card); color: var(--text); }
-      button.primary { background: var(--primary); color: white; border: 0; }
-      .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+      button, select, input {
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 8px 10px;
+        background: var(--card);
+        color: var(--text);
+      }
+      .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+      .toolbar .grow { min-width: 280px; }
+      .hint { color: var(--muted); font-size: 12px; margin-bottom: 12px; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+      .compact .toolbar, .compact .hint { display: none; }
+      .compact { padding: 10px; }
       .card {
         background: var(--card);
         border: 1px solid var(--border);
@@ -40,30 +49,36 @@
         padding: 12px;
         cursor: grab;
       }
-      .title { display: flex; justify-content: space-between; align-items: center; font-weight: 700; }
-      .time { font-size: 28px; font-weight: 800; margin: 8px 0; color: var(--primary); }
+      .title { display: flex; justify-content: space-between; align-items: center; font-weight: 700; gap: 8px; }
+      .time { font-size: var(--timeSize, 28px); font-weight: 800; margin: 8px 0; color: var(--timeColor, var(--primary)); }
       .date { color: var(--muted); font-size: 14px; }
-      .details { color: var(--muted); font-size: 12px; margin-top: 6px; display: none; }
-      .card:hover .details { display: block; }
-      .small { font-size: 12px; color: var(--muted); }
+      .details { color: var(--muted); font-size: 12px; margin-top: 6px; display: none; line-height: 1.35; }
+      .card:hover .details, .card.expanded .details { display: block; }
+      .ops { display: flex; gap: 6px; }
+      .ops button { padding: 4px 8px; font-size: 12px; }
+      .danger { color: #d14343; border-color: #e6a8a8; }
+      .primary { background: var(--primary); color: #fff; border: 0; }
     </style>
   </head>
   <body>
     <div class="toolbar">
-      <button id="themeBtn">切换深浅色</button>
+      <button id="themeBtn">深浅色</button>
+      <button id="compactBtn">最小化显示：关</button>
       <button id="topBtn">窗口置顶：关</button>
-      <button id="copyBtn" class="primary">一键复制时间</button>
-      <select id="zoneSelect"></select>
-      <input id="aliasInput" placeholder="自定义名称(如 东京)" />
+      <button id="copyBtn" class="primary">一键复制</button>
+      <select id="zoneSelect" class="grow"></select>
+      <input id="aliasInput" placeholder="重命名显示名（如 纽约办公）" />
       <button id="addBtn">添加时区</button>
+      <label>字体 <input id="sizeInput" type="range" min="18" max="48" value="28" /></label>
+      <label>颜色 <input id="colorInput" type="color" value="#2f6fff" /></label>
     </div>
-    <div class="small">拖拽卡片可调整顺序；悬停卡片可看详细时区信息；可删除自定义时区。</div>
+    <div class="hint">卡片支持拖拽排序；点击“设置”可重命名/删除。显示格式：国家 城市 时间 日期（24小时制，秒级刷新，自动夏令时/冬令时）。</div>
     <div id="grid" class="grid"></div>
 
     <script>
       const PRESET_ZONES = [
         { id: 'Asia/Shanghai', label: '中国 · 上海', locked: true },
-        { id: 'America/New_York', label: '美国 · 纽约(自动夏令时)', locked: true },
+        { id: 'America/New_York', label: '美国 · 纽约', locked: true },
         { id: 'America/Mexico_City', label: '墨西哥 · 墨西哥城', locked: true },
         { id: 'Europe/Rome', label: '意大利 · 罗马', locked: true }
       ];
@@ -72,43 +87,102 @@
       const aliasInput = document.getElementById('aliasInput');
       const grid = document.getElementById('grid');
       const themeBtn = document.getElementById('themeBtn');
+      const compactBtn = document.getElementById('compactBtn');
       const topBtn = document.getElementById('topBtn');
       const copyBtn = document.getElementById('copyBtn');
+      const sizeInput = document.getElementById('sizeInput');
+      const colorInput = document.getElementById('colorInput');
 
-      const allZones = Intl.supportedValuesOf('timeZone');
-      allZones.forEach((z) => {
-        const option = document.createElement('option');
-        option.value = z;
-        option.textContent = z;
-        zoneSelect.appendChild(option);
-      });
+      const COUNTRY_MAP = {
+        Asia: '亚洲', Europe: '欧洲', America: '美洲', Africa: '非洲', Pacific: '太平洋地区', Atlantic: '大西洋地区', Indian: '印度洋地区'
+      };
+      const COUNTRY_OVERRIDE = {
+        'Asia/Shanghai': '中国', 'America/New_York': '美国', 'America/Chicago': '美国', 'America/Los_Angeles': '美国',
+        'America/Mexico_City': '墨西哥', 'Europe/Rome': '意大利'
+      };
 
       const state = {
         theme: localStorage.getItem('theme') || 'light',
-        zones: JSON.parse(localStorage.getItem('zones') || 'null') || PRESET_ZONES,
+        compact: localStorage.getItem('compact') === '1',
+        timeSize: Number(localStorage.getItem('timeSize') || 28),
+        timeColor: localStorage.getItem('timeColor') || '#2f6fff',
+        zones: JSON.parse(localStorage.getItem('zones') || 'null') || PRESET_ZONES
       };
 
       document.body.classList.toggle('dark', state.theme === 'dark');
+      document.body.classList.toggle('compact', state.compact);
+      document.body.style.setProperty('--timeSize', `${state.timeSize}px`);
+      document.body.style.setProperty('--timeColor', state.timeColor);
+      sizeInput.value = String(state.timeSize);
+      colorInput.value = state.timeColor;
+
+      function cityName(zoneId) {
+        return zoneId.split('/').slice(1).join('/').replaceAll('_', ' ');
+      }
+      function countryName(zoneId) {
+        return COUNTRY_OVERRIDE[zoneId] || COUNTRY_MAP[zoneId.split('/')[0]] || '未知地区';
+      }
+      function zoneDisplay(zoneId) {
+        return `${countryName(zoneId)} · ${cityName(zoneId)} · ${zoneId}`;
+      }
+
+      const allZones = Intl.supportedValuesOf('timeZone').sort();
+      for (const z of allZones) {
+        const opt = document.createElement('option');
+        opt.value = z;
+        opt.textContent = zoneDisplay(z);
+        zoneSelect.appendChild(opt);
+      }
+
+      function offsetMin(zone, date) {
+        const dtf = new Intl.DateTimeFormat('en-US', {
+          timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit',
+          hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+        });
+        const p = Object.fromEntries(dtf.formatToParts(date).map(x => [x.type, x.value]));
+        const asUTC = Date.UTC(Number(p.year), Number(p.month)-1, Number(p.day), Number(p.hour), Number(p.minute), Number(p.second));
+        return (asUTC - date.getTime()) / 60000;
+      }
+      function dstLabel(zone, now) {
+        const jan = offsetMin(zone, new Date(now.getFullYear(), 0, 1));
+        const jul = offsetMin(zone, new Date(now.getFullYear(), 6, 1));
+        const cur = offsetMin(zone, now);
+        if (jan === jul) return '无夏令时';
+        const dstOffset = Math.max(jan, jul);
+        return cur === dstOffset ? '夏令时' : '冬令时';
+      }
 
       function fmt(zone) {
         const now = new Date();
         const time = new Intl.DateTimeFormat('zh-CN', {
-          hour12: false,
-          hour: '2-digit', minute: '2-digit', second: '2-digit',
-          timeZone: zone
+          hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: zone
         }).format(now);
         const date = new Intl.DateTimeFormat('zh-CN', {
           weekday: 'long', year: 'numeric', month: '2-digit', day: '2-digit', timeZone: zone
         }).format(now);
-        const details = new Intl.DateTimeFormat('en-US', {
-          timeZone: zone,
-          timeZoneName: 'longOffset',
-          hour: '2-digit', minute: '2-digit'
-        }).formatToParts(now).find((x) => x.type === 'timeZoneName')?.value || zone;
-        return { time, date, details };
+        const offset = new Intl.DateTimeFormat('en-US', {
+          timeZone: zone, timeZoneName: 'longOffset', hour: '2-digit', minute: '2-digit'
+        }).formatToParts(now).find(x => x.type === 'timeZoneName')?.value || zone;
+        return { time, date, offset, season: dstLabel(zone, now) };
       }
 
-      function saveZones() { localStorage.setItem('zones', JSON.stringify(state.zones)); }
+      function persist() {
+        localStorage.setItem('theme', state.theme);
+        localStorage.setItem('compact', state.compact ? '1' : '0');
+        localStorage.setItem('timeSize', String(state.timeSize));
+        localStorage.setItem('timeColor', state.timeColor);
+        localStorage.setItem('zones', JSON.stringify(state.zones));
+      }
+
+      async function fitCompactWindow() {
+        if (!state.compact) return;
+        const count = Math.max(1, state.zones.length);
+        const cols = count > 4 ? 3 : count > 1 ? 2 : 1;
+        const rows = Math.ceil(count / cols);
+        const width = cols * 265 + 40;
+        const height = rows * 165 + 40;
+        await window.desktopApi.setWindowSize(width, height);
+      }
 
       function render() {
         grid.innerHTML = '';
@@ -117,23 +191,35 @@
           card.className = 'card';
           card.draggable = true;
           card.dataset.index = String(idx);
-          const { time, date, details } = fmt(z.id);
-
+          const { time, date, offset, season } = fmt(z.id);
           card.innerHTML = `
             <div class="title">
-              <span>${z.label}</span>
-              ${z.locked ? '' : '<button data-del="1">删除</button>'}
+              <span>${z.label || `${countryName(z.id)} · ${cityName(z.id)}`}</span>
+              <div class="ops">
+                <button data-edit="1">设置</button>
+                ${z.locked ? '' : '<button class="danger" data-del="1">删除</button>'}
+              </div>
             </div>
             <div class="time">${time}</div>
             <div class="date">${date}</div>
-            <div class="details">${z.id} · ${details}</div>
+            <div class="details">${countryName(z.id)} · ${cityName(z.id)}<br/>时区：${z.id} · ${offset} · ${season}<br/>悬停或点设置查看</div>
           `;
 
           card.querySelector('[data-del]')?.addEventListener('click', (e) => {
             e.stopPropagation();
             state.zones.splice(idx, 1);
-            saveZones();
+            persist();
             render();
+          });
+          card.querySelector('[data-edit]')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const next = prompt('重命名显示名称', z.label || '');
+            if (next !== null) {
+              state.zones[idx].label = next.trim() || `${countryName(z.id)} · ${cityName(z.id)}`;
+              persist();
+              render();
+            }
+            card.classList.toggle('expanded');
           });
 
           card.addEventListener('dragstart', (e) => e.dataTransfer.setData('text/plain', card.dataset.index));
@@ -145,18 +231,35 @@
             if (Number.isNaN(from) || from === to) return;
             const [moved] = state.zones.splice(from, 1);
             state.zones.splice(to, 0, moved);
-            saveZones();
+            persist();
             render();
           });
-
           grid.appendChild(card);
         });
+        fitCompactWindow();
       }
 
       themeBtn.addEventListener('click', () => {
         state.theme = state.theme === 'dark' ? 'light' : 'dark';
-        localStorage.setItem('theme', state.theme);
         document.body.classList.toggle('dark', state.theme === 'dark');
+        persist();
+      });
+      compactBtn.addEventListener('click', async () => {
+        state.compact = !state.compact;
+        document.body.classList.toggle('compact', state.compact);
+        compactBtn.textContent = `最小化显示：${state.compact ? '开' : '关'}`;
+        persist();
+        await fitCompactWindow();
+      });
+      sizeInput.addEventListener('input', () => {
+        state.timeSize = Number(sizeInput.value);
+        document.body.style.setProperty('--timeSize', `${state.timeSize}px`);
+        persist();
+      });
+      colorInput.addEventListener('input', () => {
+        state.timeColor = colorInput.value;
+        document.body.style.setProperty('--timeColor', state.timeColor);
+        persist();
       });
 
       topBtn.addEventListener('click', async () => {
@@ -167,21 +270,20 @@
 
       copyBtn.addEventListener('click', async () => {
         const lines = state.zones.map((z) => {
-          const { time, date } = fmt(z.id);
-          return `${z.label}: ${date} ${time}`;
+          const { time, date, season } = fmt(z.id);
+          return `${z.label}: ${date} ${time} (${season})`;
         });
-        const text = lines.join('\n');
-        await navigator.clipboard.writeText(text);
+        await navigator.clipboard.writeText(lines.join('\n'));
         copyBtn.textContent = '已复制';
-        setTimeout(() => (copyBtn.textContent = '一键复制时间'), 1200);
+        setTimeout(() => copyBtn.textContent = '一键复制', 1000);
       });
 
       document.getElementById('addBtn').addEventListener('click', () => {
         const id = zoneSelect.value;
-        if (!id || state.zones.some((z) => z.id === id)) return;
-        state.zones.push({ id, label: aliasInput.value.trim() || id, locked: false });
+        if (!id || state.zones.some(z => z.id === id)) return;
+        state.zones.push({ id, label: aliasInput.value.trim() || `${countryName(id)} · ${cityName(id)}`, locked: false });
         aliasInput.value = '';
-        saveZones();
+        persist();
         render();
       });
 
@@ -189,8 +291,9 @@
       (async () => {
         const onTop = await window.desktopApi.getAlwaysOnTop();
         topBtn.textContent = `窗口置顶：${onTop ? '开' : '关'}`;
+        compactBtn.textContent = `最小化显示：${state.compact ? '开' : '关'}`;
+        render();
       })();
-      render();
     </script>
   </body>
 </html>
