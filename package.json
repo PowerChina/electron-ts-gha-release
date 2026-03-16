@@ -9,9 +9,9 @@
     "pack": "npm run build && electron-builder --dir",
     "dist": "npm run build && electron-builder",
     "release": "npm run dist",
-    "dist:win": "npm run build && electron-builder --win nsis",
-    "dist:mac": "npm run build && electron-builder --mac dmg zip --x64",
-    "dist:linux": "npm run build && electron-builder --linux AppImage",
+    "dist:win": "npm run build && electron-builder --publish never --win nsis",
+    "dist:mac": "npm run build && electron-builder --publish never --mac dmg zip --x64",
+    "dist:linux": "npm run build && electron-builder --publish never --linux AppImage",
     "verify:exe": "npm run dist:win && ls release/*.exe"
   },
   "keywords": [],
