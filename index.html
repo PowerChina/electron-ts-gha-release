@@ -1,35 +1,196 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Electron TS Starter</title>
+    <title>World Time Board</title>
     <style>
+      :root {
+        --bg: #f3f7ff;
+        --card: #ffffff;
+        --text: #1d2a44;
+        --muted: #5d6f93;
+        --primary: #2f6fff;
+        --border: #d8e5ff;
+      }
+      body.dark {
+        --bg: #0d1526;
+        --card: #17233b;
+        --text: #eff4ff;
+        --muted: #a8b8db;
+        --primary: #6f9dff;
+        --border: #27406d;
+      }
+      * { box-sizing: border-box; }
       body {
-        font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        display: grid;
-        place-items: center;
-        height: 100vh;
         margin: 0;
-        background: #0f172a;
-        color: #e2e8f0;
+        padding: 16px;
+        background: var(--bg);
+        color: var(--text);
+        font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       }
+      .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+      button, select, input { border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; background: var(--card); color: var(--text); }
+      button.primary { background: var(--primary); color: white; border: 0; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
       .card {
-        border: 1px solid #334155;
-        border-radius: 12px;
-        padding: 24px;
-        max-width: 640px;
-        text-align: center;
-        background: #111827;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 12px;
+        cursor: grab;
       }
-      code { color: #38bdf8; }
+      .title { display: flex; justify-content: space-between; align-items: center; font-weight: 700; }
+      .time { font-size: 28px; font-weight: 800; margin: 8px 0; color: var(--primary); }
+      .date { color: var(--muted); font-size: 14px; }
+      .details { color: var(--muted); font-size: 12px; margin-top: 6px; display: none; }
+      .card:hover .details { display: block; }
+      .small { font-size: 12px; color: var(--muted); }
     </style>
   </head>
   <body>
-    <div class="card">
-      <h1>Electron + TypeScript</h1>
-      <p>打包产物会在 <code>release/</code> 目录下。</p>
-      <p>Windows 下默认生成 NSIS 安装包 <code>.exe</code>。</p>
+    <div class="toolbar">
+      <button id="themeBtn">切换深浅色</button>
+      <button id="topBtn">窗口置顶：关</button>
+      <button id="copyBtn" class="primary">一键复制时间</button>
+      <select id="zoneSelect"></select>
+      <input id="aliasInput" placeholder="自定义名称(如 东京)" />
+      <button id="addBtn">添加时区</button>
     </div>
+    <div class="small">拖拽卡片可调整顺序；悬停卡片可看详细时区信息；可删除自定义时区。</div>
+    <div id="grid" class="grid"></div>
+
+    <script>
+      const PRESET_ZONES = [
+        { id: 'Asia/Shanghai', label: '中国 · 上海', locked: true },
+        { id: 'America/New_York', label: '美国 · 纽约(自动夏令时)', locked: true },
+        { id: 'America/Mexico_City', label: '墨西哥 · 墨西哥城', locked: true },
+        { id: 'Europe/Rome', label: '意大利 · 罗马', locked: true }
+      ];
+
+      const zoneSelect = document.getElementById('zoneSelect');
+      const aliasInput = document.getElementById('aliasInput');
+      const grid = document.getElementById('grid');
+      const themeBtn = document.getElementById('themeBtn');
+      const topBtn = document.getElementById('topBtn');
+      const copyBtn = document.getElementById('copyBtn');
+
+      const allZones = Intl.supportedValuesOf('timeZone');
+      allZones.forEach((z) => {
+        const option = document.createElement('option');
+        option.value = z;
+        option.textContent = z;
+        zoneSelect.appendChild(option);
+      });
+
+      const state = {
+        theme: localStorage.getItem('theme') || 'light',
+        zones: JSON.parse(localStorage.getItem('zones') || 'null') || PRESET_ZONES,
+      };
+
+      document.body.classList.toggle('dark', state.theme === 'dark');
+
+      function fmt(zone) {
+        const now = new Date();
+        const time = new Intl.DateTimeFormat('zh-CN', {
+          hour12: false,
+          hour: '2-digit', minute: '2-digit', second: '2-digit',
+          timeZone: zone
+        }).format(now);
+        const date = new Intl.DateTimeFormat('zh-CN', {
+          weekday: 'long', year: 'numeric', month: '2-digit', day: '2-digit', timeZone: zone
+        }).format(now);
+        const details = new Intl.DateTimeFormat('en-US', {
+          timeZone: zone,
+          timeZoneName: 'longOffset',
+          hour: '2-digit', minute: '2-digit'
+        }).formatToParts(now).find((x) => x.type === 'timeZoneName')?.value || zone;
+        return { time, date, details };
+      }
+
+      function saveZones() { localStorage.setItem('zones', JSON.stringify(state.zones)); }
+
+      function render() {
+        grid.innerHTML = '';
+        state.zones.forEach((z, idx) => {
+          const card = document.createElement('div');
+          card.className = 'card';
+          card.draggable = true;
+          card.dataset.index = String(idx);
+          const { time, date, details } = fmt(z.id);
+
+          card.innerHTML = `
+            <div class="title">
+              <span>${z.label}</span>
+              ${z.locked ? '' : '<button data-del="1">删除</button>'}
+            </div>
+            <div class="time">${time}</div>
+            <div class="date">${date}</div>
+            <div class="details">${z.id} · ${details}</div>
+          `;
+
+          card.querySelector('[data-del]')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            state.zones.splice(idx, 1);
+            saveZones();
+            render();
+          });
+
+          card.addEventListener('dragstart', (e) => e.dataTransfer.setData('text/plain', card.dataset.index));
+          card.addEventListener('dragover', (e) => e.preventDefault());
+          card.addEventListener('drop', (e) => {
+            e.preventDefault();
+            const from = Number(e.dataTransfer.getData('text/plain'));
+            const to = idx;
+            if (Number.isNaN(from) || from === to) return;
+            const [moved] = state.zones.splice(from, 1);
+            state.zones.splice(to, 0, moved);
+            saveZones();
+            render();
+          });
+
+          grid.appendChild(card);
+        });
+      }
+
+      themeBtn.addEventListener('click', () => {
+        state.theme = state.theme === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', state.theme);
+        document.body.classList.toggle('dark', state.theme === 'dark');
+      });
+
+      topBtn.addEventListener('click', async () => {
+        const current = await window.desktopApi.getAlwaysOnTop();
+        const next = await window.desktopApi.setAlwaysOnTop(!current);
+        topBtn.textContent = `窗口置顶：${next ? '开' : '关'}`;
+      });
+
+      copyBtn.addEventListener('click', async () => {
+        const lines = state.zones.map((z) => {
+          const { time, date } = fmt(z.id);
+          return `${z.label}: ${date} ${time}`;
+        });
+        const text = lines.join('\n');
+        await navigator.clipboard.writeText(text);
+        copyBtn.textContent = '已复制';
+        setTimeout(() => (copyBtn.textContent = '一键复制时间'), 1200);
+      });
+
+      document.getElementById('addBtn').addEventListener('click', () => {
+        const id = zoneSelect.value;
+        if (!id || state.zones.some((z) => z.id === id)) return;
+        state.zones.push({ id, label: aliasInput.value.trim() || id, locked: false });
+        aliasInput.value = '';
+        saveZones();
+        render();
+      });
+
+      setInterval(render, 1000);
+      (async () => {
+        const onTop = await window.desktopApi.getAlwaysOnTop();
+        topBtn.textContent = `窗口置顶：${onTop ? '开' : '关'}`;
+      })();
+      render();
+    </script>
   </body>
 </html>

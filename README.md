@@ -1,73 +1,42 @@
-# Electron + TypeScript + GitHub Actions (Windows EXE)
+# World Time Board (Electron + TypeScript)
 
-这是一套可直接发布到 GitHub 的模板，重点解决 **Windows 执行打包后没有 `.exe`** 的问题。
+已实现功能：
 
-## 技术栈
+## 基础功能
 
-- Electron
-- TypeScript
-- electron-builder（Windows 目标固定 NSIS）
-- GitHub Actions（自动构建并上传 Release 附件）
+- 同时显示 4 个预设时区（中国/美国纽约/墨西哥城/意大利罗马）
+- 时区时间每秒实时更新（秒级）
+- 美国时区通过 IANA 时区库自动处理夏令时/冬令时
+- 支持添加/删除自定义时区
+- 深色/浅色主题切换
+- 24 小时制，显示日期与星期
 
-## 本地开发
+## 亮点功能
+
+- 系统托盘（关闭窗口不退出，双击托盘恢复）
+- 窗口置顶开关
+- 一键复制所有时区时间
+- 卡片拖拽排序
+- 悬停显示详细时区偏移信息
+
+## 打包发布
+
+### 本地开发
 
 ```bash
 npm ci
 npm start
 ```
 
-## 本地打包 Windows EXE
-
-> 在 Windows 机器上执行（或 GitHub Actions 的 windows-latest）
+### 本地构建 Windows EXE
 
 ```bash
 npm run dist:win
 ```
 
-产物目录：`release/`
+产物在 `release/` 目录。
 
-你会看到：
+### GitHub 自动发布
 
-- `*.exe`（安装包）
-- `latest.yml`
-- `*.blockmap`
-
-Windows 下也可直接双击：`build-win.bat`
-
-## 发布到 GitHub
-
-1. 初始化仓库并推送：
-
-```bash
-git init
-git add .
-git commit -m "feat: electron + ts + gha release template"
-git branch -M main
-git remote add origin <你的仓库地址>
-git push -u origin main
-```
-
-2. 打 tag 触发 release workflow：
-
-```bash
-git tag v0.1.0
-git push origin v0.1.0
-```
-
-3. GitHub Actions 会执行：
-
-- `npm ci`
-- `npm run dist -- --win nsis`
-- 上传 `release/*.exe` 等产物
-- 自动创建/更新 GitHub Release 并附加安装包
-
-## 为什么上一版可能没有 EXE
-
-常见原因：
-
-- 没有用 `electron-builder` 的 `nsis` 目标
-- 在非 Windows 环境构建 Windows 安装包失败
-- 工作流只上传了目录，未匹配 `release/*.exe`
-- 构建输出目录与 workflow 读取路径不一致
-
-本模板已把这些点都固定好（`release.yml` + `build.win.target=nsis`）。
+- Push `v*.*.*` tag 后，GitHub Actions 自动构建
+- 自动上传 Windows EXE 到 GitHub Release
