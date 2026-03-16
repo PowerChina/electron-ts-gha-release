@@ -12,7 +12,26 @@ permissions:
   contents: write
 
 jobs:
+  e2e-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Run Electron E2E smoke tests
+        run: xvfb-run -a npm run test:e2e
+
   build-windows:
+    needs: e2e-smoke
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -52,6 +71,7 @@ jobs:
           fail_on_unmatched_files: false
 
   build-mac:
+    needs: e2e-smoke
     runs-on: macos-15-intel
     steps:
       - name: Checkout
@@ -93,6 +113,7 @@ jobs:
           fail_on_unmatched_files: false
 
   build-linux:
+    needs: e2e-smoke
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
