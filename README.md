@@ -1,4 +1,4 @@
-# World Time Board (Electron + TypeScript)
+# World Time Board
 
 已实现功能：
 

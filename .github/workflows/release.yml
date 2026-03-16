@@ -1,4 +1,4 @@
-name: Release Electron App
+name: Release World Time Board
 
 on:
   push:

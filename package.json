@@ -1,5 +1,5 @@
 {
-  "name": "electron-ts-gha-release",
+  "name": "world-time-board",
   "version": "0.1.0",
   "main": "dist/main.js",
   "scripts": {
@@ -17,7 +17,7 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "Electron + TypeScript + GitHub Actions release template",
+  "description": "World Time Board desktop app",
   "devDependencies": {
     "@types/node": "^25.5.0",
     "concurrently": "^9.2.1",
@@ -28,8 +28,8 @@
     "wait-on": "^9.0.4"
   },
   "build": {
-    "appId": "com.lihua.electronts",
-    "productName": "ElectronTSApp",
+    "appId": "com.lihua.worldtimeboard",
+    "productName": "World Time Board",
     "directories": {
       "output": "release"
     },
